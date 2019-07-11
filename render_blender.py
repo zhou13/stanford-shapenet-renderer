@@ -2,7 +2,7 @@
 # Also produces depth map at the same time.
 #
 # Example:
-# blender --background --python mytest.py -- --views 10 /path/to/my.obj
+#   blender template.blend --background --python render_blender.py -- --output_folder /tmp /data/shapenet/ShapeNetCore.v2/02958343/1a0bc9ab92c915167ae33d942430658c/models/model_normalized.obj
 #
 
 import os
