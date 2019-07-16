@@ -6,6 +6,7 @@
 #
 
 import os
+import numpy as np
 import sys
 import json
 import argparse
@@ -21,6 +22,8 @@ parser.add_argument('obj', type=str,
                     help='Path to the obj file to be rendered.')
 parser.add_argument('--output_folder', type=str, default='/tmp',
                     help='The path the output will be dumped to.')
+parser.add_argument('--dump', action='store_true',
+                    help='Save the blend file')
 parser.add_argument('--scale', type=float, default=1,
                     help='Scaling factor applied to model. Depends on size of mesh.')
 parser.add_argument('--remove_doubles', type=bool, default=True,
@@ -76,19 +79,12 @@ render_layers = tree.nodes.new("CompositorNodeRLayers")
 
 depth_file_output = tree.nodes.new(type="CompositorNodeOutputFile")
 depth_file_output.label = "Depth Output"
+depth_file_output.name = "Depth Output"
 if args.format == "OPEN_EXR":
     links.new(render_layers.outputs["Depth"], depth_file_output.inputs[0])
+    depth_file_output.format.color_depth = "32"
 else:
-    # Remap as other types can not represent the full range of depth.
-    map = tree.nodes.new(type="CompositorNodeMapValue")
-    # Size is chosen kind of arbitrarily, try out until you're satisfied with resulting depth map.
-    map.offset = [-0.7]
-    map.size = [args.depth_scale]
-    map.use_min = True
-    map.min = [0]
-    links.new(render_layers.outputs["Depth"], map.inputs[0])
-
-    links.new(map.outputs[0], depth_file_output.inputs[0])
+    assert False
 
 # scale_normal = tree.nodes.new(type="CompositorNodeMixRGB")
 # scale_normal.blend_type = "MULTIPLY"
@@ -180,7 +176,8 @@ scene.render.image_settings.file_format = "PNG"  # set output format to .png
 stepsize = 360.0 / args.views
 rotation_mode = "XYZ"
 
-# bpy.ops.wm.save_as_mainfile(filepath="dump.blend")
+if args.dump:
+    bpy.ops.wm.save_as_mainfile(filepath="dump.blend")
 
 depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
@@ -188,9 +185,11 @@ depth_file_output.base_path = ""
 
 b_empty.rotation_euler[0] = radians(-30)
 b_empty.rotation_euler[2] = radians(stepsize / 2)
+
 for j in range(3):
     for i in range(0, args.views):
         print("Rotation {}, {}".format((stepsize * i), radians(stepsize * i)))
+        bpy.context.scene.update()  # update camera information for json
 
         prefix = f"{fp}r{j}_{int(i * stepsize):03d}"
         scene.render.filepath = prefix
@@ -198,7 +197,11 @@ for j in range(3):
         # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
         # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
 
-        bpy.ops.render.render(write_still=True)  # render still
+        # render
+        if not os.path.exists(f"{prefix}.png"):
+            bpy.ops.render.render(write_still=True)
+
+        # save camera
         RT, K = camera_matrix(cam, scene.render)
         with open(f"{prefix}.json".format(j, int(i * stepsize)), "w") as f:
             json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
