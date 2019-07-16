@@ -7,6 +7,7 @@
 
 import os
 import sys
+import json
 import argparse
 from math import radians
 
@@ -36,6 +37,21 @@ parser.add_argument('--format', type=str, default='OPEN_EXR',
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
 # fmt: on
+
+
+def tolist2d(xs):
+    return [list(x) for x in xs]
+
+
+def camera_matrix(camera, render):
+    modelview_matrix = camera.matrix_world.inverted()
+    projection_matrix = camera.calc_matrix_camera(
+        render.resolution_x,
+        render.resolution_y,
+        render.pixel_aspect_x,
+        render.pixel_aspect_y,
+    )
+    return modelview_matrix, projection_matrix
 
 
 # Set up rendering of depth map.
@@ -164,24 +180,28 @@ scene.render.image_settings.file_format = "PNG"  # set output format to .png
 stepsize = 360.0 / args.views
 rotation_mode = "XYZ"
 
-# bpy.ops.wm.save_as_mainfile(filepath="dump.blender")
+# bpy.ops.wm.save_as_mainfile(filepath="dump.blend")
 
 depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
 b_empty.rotation_euler[0] = radians(-30)
-b_empty.rotation_euler[2] = stepsize / 2
+b_empty.rotation_euler[2] = radians(stepsize / 2)
 for j in range(3):
     for i in range(0, args.views):
         print("Rotation {}, {}".format((stepsize * i), radians(stepsize * i)))
 
-        scene.render.filepath = fp + "r{}_{:03d}".format(j, int(i * stepsize))
+        prefix = f"{fp}r{j}_{int(i * stepsize):03d}"
+        scene.render.filepath = prefix
         depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
         # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
         # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
 
         bpy.ops.render.render(write_still=True)  # render still
+        RT, K = camera_matrix(cam, scene.render)
+        with open(f"{prefix}.json".format(j, int(i * stepsize)), "w") as f:
+            json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
 
         b_empty.rotation_euler[2] += radians(stepsize)
     b_empty.rotation_euler[0] += radians(-30)

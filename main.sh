@@ -1,0 +1,1 @@
+find /data/archive/ShapeNetCore.v2 -name '*.obj' -print0 | sort -z | xargs -0 -n1 -P13 -I {} blender template.blend --background --python render_blender.py -- --output_folder /data/archive/ShapeNetCoreRendering {}
