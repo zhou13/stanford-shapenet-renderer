@@ -16,7 +16,9 @@ import bpy
 
 # fmt: off
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
-parser.add_argument('--views', type=int, default=12,
+parser.add_argument('--views_yaw', type=int, default=16,
+                    help='number of views to be rendered')
+parser.add_argument('--views_pitch', type=int, default=2,
                     help='number of views to be rendered')
 parser.add_argument('obj', type=str,
                     help='Path to the obj file to be rendered.')
@@ -30,8 +32,6 @@ parser.add_argument('--remove_doubles', type=bool, default=True,
                     help='Remove double vertices to improve mesh quality.')
 parser.add_argument('--edge_split', type=bool, default=True,
                     help='Adds edge split filter.')
-parser.add_argument('--depth_scale', type=float, default=1.4,
-                    help='Scaling that is applied to depth. Depends on size of mesh. Try out various values until you get a good result. Ignored if format is OPEN_EXR.')
 parser.add_argument('--color_depth', type=str, default='16',
                     help='Number of bit per channel used for output. Either 8 or 16.')
 parser.add_argument('--format', type=str, default='OPEN_EXR',
@@ -157,8 +157,8 @@ def parent_obj_to_camera(b_camera):
 
 
 scene = bpy.context.scene
-scene.render.resolution_x = 600
-scene.render.resolution_y = 600
+scene.render.resolution_x = 512
+scene.render.resolution_y = 512
 scene.render.resolution_percentage = 100
 scene.render.alpha_mode = "TRANSPARENT"
 cam = scene.objects["Camera"]
@@ -173,7 +173,8 @@ model_identifier = os.path.split(args.obj)[0].split("/")[-3:-1]
 fp = os.path.join(args.output_folder, *model_identifier) + "/"
 scene.render.image_settings.file_format = "PNG"  # set output format to .png
 
-stepsize = 360.0 / args.views
+stepsize_yaw = 360.0 / args.views_yaw
+stepsize_pitch = 90 / (args.views_pitch + 1)
 rotation_mode = "XYZ"
 
 if args.dump:
@@ -183,15 +184,15 @@ depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
-b_empty.rotation_euler[0] = radians(-30)
-b_empty.rotation_euler[2] = radians(stepsize / 2)
+b_empty.rotation_euler[0] = radians(-stepsize_pitch)
+b_empty.rotation_euler[2] = radians(stepsize_yaw / 2)
 
 for j in range(3):
-    for i in range(0, args.views):
-        print("Rotation {}, {}".format((stepsize * i), radians(stepsize * i)))
+    for i in range(0, args.views_yaw):
+        print("Rotation {}, {}".format((stepsize_yaw * i), radians(stepsize_yaw * i)))
         bpy.context.scene.update()  # update camera information for json
 
-        prefix = f"{fp}r{j}_{int(i * stepsize):03d}"
+        prefix = f"{fp}r{j}_{int(i * stepsize_yaw):03d}"
         scene.render.filepath = prefix
         depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
         # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
@@ -203,8 +204,8 @@ for j in range(3):
 
         # save camera
         RT, K = camera_matrix(cam, scene.render)
-        with open(f"{prefix}.json".format(j, int(i * stepsize)), "w") as f:
+        with open(f"{prefix}.json".format(j, int(i * stepsize_yaw)), "w") as f:
             json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
 
-        b_empty.rotation_euler[2] += radians(stepsize)
-    b_empty.rotation_euler[0] += radians(-30)
+        b_empty.rotation_euler[2] += radians(stepsize_yaw)
+    b_empty.rotation_euler[0] -= radians(stepsize_pitch)
