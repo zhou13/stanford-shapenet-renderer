@@ -60,7 +60,7 @@ def camera_matrix(camera, render):
 # Set up rendering of depth map.
 bpy.context.scene.use_nodes = True
 bpy.context.scene.render.threads_mode = "FIXED"
-bpy.context.scene.render.threads = 4
+bpy.context.scene.render.threads = 2
 tree = bpy.context.scene.node_tree
 links = tree.links
 
@@ -157,8 +157,8 @@ def parent_obj_to_camera(b_camera):
 
 
 scene = bpy.context.scene
-scene.render.resolution_x = 512
-scene.render.resolution_y = 512
+scene.render.resolution_x = 256
+scene.render.resolution_y = 256
 scene.render.resolution_percentage = 100
 scene.render.alpha_mode = "TRANSPARENT"
 cam = scene.objects["Camera"]
@@ -184,28 +184,31 @@ depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
-b_empty.rotation_euler[0] = radians(-stepsize_pitch)
-b_empty.rotation_euler[2] = radians(stepsize_yaw / 2)
 
-for j in range(3):
-    for i in range(0, args.views_yaw):
-        print("Rotation {}, {}".format((stepsize_yaw * i), radians(stepsize_yaw * i)))
-        bpy.context.scene.update()  # update camera information for json
+for k, d in enumerate([1.5, 1.2]):
+    b_empty.rotation_euler[0] = radians(-stepsize_pitch)
+    b_empty.rotation_euler[2] = radians(stepsize_yaw / 2)
+    cam.location = (0, 0, d)
 
-        prefix = f"{fp}r{j}_{int(i * stepsize_yaw):03d}"
-        scene.render.filepath = prefix
-        depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
-        # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
-        # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
+    for j in range(2):
+        for i in range(0, args.views_yaw):
+            print("Rotation {}, {}, {}".format((stepsize_yaw * i), radians(stepsize_yaw * i), d))
+            bpy.context.scene.update()  # update camera information for json
 
-        # render
-        if not os.path.exists(f"{prefix}.png"):
-            bpy.ops.render.render(write_still=True)
+            prefix = "{}r{}d{}_{:03d}".format(fp, j, k, int(i*stepsize_yaw))
+            scene.render.filepath = prefix
+            depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
+            # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
+            # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
 
-        # save camera
-        RT, K = camera_matrix(cam, scene.render)
-        with open(f"{prefix}.json".format(j, int(i * stepsize_yaw)), "w") as f:
-            json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
+            # render
+            if not os.path.exists("{}.png".format(prefix)):
+                bpy.ops.render.render(write_still=True)
 
-        b_empty.rotation_euler[2] += radians(stepsize_yaw)
-    b_empty.rotation_euler[0] -= radians(stepsize_pitch)
+            # save camera
+            RT, K = camera_matrix(cam, scene.render)
+            with open("{}.json".format(prefix), "w") as f:
+                json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
+
+            b_empty.rotation_euler[2] += radians(stepsize_yaw)
+        b_empty.rotation_euler[0] -= radians(stepsize_pitch)
