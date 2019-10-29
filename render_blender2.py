@@ -169,7 +169,7 @@ fp = os.path.join(args.output_folder, *model_identifier) + "/"
 scene.render.image_settings.file_format = "PNG"  # set output format to .png
 scene.render.image_settings.color_depth = "8"
 
-stepsize_pitch = 90 / (args.views_pitch + 1)
+stepsize_pitch = -radians(90 / (args.views_pitch + 1))
 rotation_mode = "XYZ"
 
 if args.dump:
@@ -180,24 +180,24 @@ depth_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
 
-for pitch in range(1, 1 + args.views_pitch):
-    b_empty.rotation_euler[0] = -pitch * radians(stepsize_pitch)
-    for view in range(0, args.views_yaw):
-        cam.location = (0, 0, random.uniform(1.1, 1.5))
-        b_empty.rotation_euler[2] = random.uniform(0, 2 * np.pi)
-        bpy.context.scene.update()  # update camera information for json
+for view in range(0, args.views_yaw * args.views_pitch):
+    # cam.location = (0, 0, random.uniform(1.1, 1.5))  # v0
+    cam.location = (0, 0, random.uniform(1.0, 1.6))
+    b_empty.rotation_euler[0] = random.uniform(1, args.views_pitch) * stepsize_pitch
+    b_empty.rotation_euler[2] = random.uniform(0, 2 * np.pi)
+    bpy.context.scene.update()  # update camera information for json
 
-        prefix = "{}p{}v{:02d}".format(fp, pitch, view)
-        scene.render.filepath = prefix
-        depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
-        # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
-        # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
+    prefix = "{}{:02d}".format(fp, view)
+    scene.render.filepath = prefix
+    depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
+    # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
+    # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
 
-        # render
-        if not os.path.exists("{}.png".format(prefix)):
-            bpy.ops.render.render(write_still=True)
+    # render
+    if not os.path.exists("{}.png".format(prefix)):
+        bpy.ops.render.render(write_still=True)
 
-        # save camera
-        RT, K = camera_matrix(cam, scene.render)
-        with open("{}.json".format(prefix), "w") as f:
-            json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
+    # save camera
+    RT, K = camera_matrix(cam, scene.render)
+    with open("{}.json".format(prefix), "w") as f:
+        json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
