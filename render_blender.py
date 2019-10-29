@@ -6,11 +6,13 @@
 #
 
 import os
-import numpy as np
 import sys
 import json
+import random
 import argparse
 from math import radians
+
+import numpy as np
 
 import bpy
 
@@ -18,8 +20,8 @@ import bpy
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
 parser.add_argument('--views_yaw', type=int, default=16,
                     help='number of views to be rendered')
-parser.add_argument('--views_pitch', type=int, default=2,
-                    help='number of views to be rendered')
+parser.add_argument('--views_pitch', type=int, default=3,
+                    help='number of pitches to be rendered')
 parser.add_argument('obj', type=str,
                     help='Path to the obj file to be rendered.')
 parser.add_argument('--output_folder', type=str, default='/tmp',
@@ -32,10 +34,6 @@ parser.add_argument('--remove_doubles', type=bool, default=True,
                     help='Remove double vertices to improve mesh quality.')
 parser.add_argument('--edge_split', type=bool, default=True,
                     help='Adds edge split filter.')
-parser.add_argument('--color_depth', type=str, default='16',
-                    help='Number of bit per channel used for output. Either 8 or 16.')
-parser.add_argument('--format', type=str, default='OPEN_EXR',
-                    help='Format of files generated. Either PNG or OPEN_EXR')
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -67,8 +65,8 @@ links = tree.links
 # Add passes for additionally dumping albedo and normals.
 bpy.context.scene.render.layers["RenderLayer"].use_pass_normal = True
 bpy.context.scene.render.layers["RenderLayer"].use_pass_color = True
-bpy.context.scene.render.image_settings.file_format = args.format
-bpy.context.scene.render.image_settings.color_depth = args.color_depth
+bpy.context.scene.render.image_settings.file_format = "OPEN_EXR"
+bpy.context.scene.render.image_settings.color_depth = "16"
 
 # Clear default nodes
 for n in tree.nodes:
@@ -80,11 +78,8 @@ render_layers = tree.nodes.new("CompositorNodeRLayers")
 depth_file_output = tree.nodes.new(type="CompositorNodeOutputFile")
 depth_file_output.label = "Depth Output"
 depth_file_output.name = "Depth Output"
-if args.format == "OPEN_EXR":
-    links.new(render_layers.outputs["Depth"], depth_file_output.inputs[0])
-    depth_file_output.format.color_depth = "32"
-else:
-    assert False
+links.new(render_layers.outputs["Depth"], depth_file_output.inputs[0])
+depth_file_output.format.color_depth = "32"
 
 # scale_normal = tree.nodes.new(type="CompositorNodeMixRGB")
 # scale_normal.blend_type = "MULTIPLY"
@@ -172,9 +167,9 @@ cam_constraint.target = b_empty
 model_identifier = os.path.split(args.obj)[0].split("/")[-3:-1]
 fp = os.path.join(args.output_folder, *model_identifier) + "/"
 scene.render.image_settings.file_format = "PNG"  # set output format to .png
+scene.render.image_settings.color_depth = "8"
 
-stepsize_yaw = 360.0 / args.views_yaw
-stepsize_pitch = 90 / (args.views_pitch + 1)
+stepsize_pitch = -radians(90 / (args.views_pitch + 1))
 rotation_mode = "XYZ"
 
 if args.dump:
@@ -185,30 +180,24 @@ depth_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
 
-for k, d in enumerate([1.5, 1.2]):
-    b_empty.rotation_euler[0] = radians(-stepsize_pitch)
-    b_empty.rotation_euler[2] = radians(stepsize_yaw / 2)
-    cam.location = (0, 0, d)
+for view in range(0, args.views_yaw * args.views_pitch):
+    # cam.location = (0, 0, random.uniform(1.1, 1.5))  # v0
+    cam.location = (0, 0, random.uniform(1.0, 1.6))
+    b_empty.rotation_euler[0] = random.uniform(1, args.views_pitch) * stepsize_pitch
+    b_empty.rotation_euler[2] = random.uniform(0, 2 * np.pi)
+    bpy.context.scene.update()  # update camera information for json
 
-    for j in range(2):
-        for i in range(0, args.views_yaw):
-            print("Rotation {}, {}, {}".format((stepsize_yaw * i), radians(stepsize_yaw * i), d))
-            bpy.context.scene.update()  # update camera information for json
+    prefix = "{}{:02d}".format(fp, view)
+    scene.render.filepath = prefix
+    depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
+    # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
+    # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
 
-            prefix = "{}r{}d{}_{:03d}".format(fp, j, k, int(i*stepsize_yaw))
-            scene.render.filepath = prefix
-            depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
-            # normal_file_output.file_slots[0].path = scene.render.filepath + "_normal.png"
-            # albedo_file_output.file_slots[0].path = scene.render.filepath + "_albedo.png"
+    # render
+    if not os.path.exists("{}.png".format(prefix)):
+        bpy.ops.render.render(write_still=True)
 
-            # render
-            if not os.path.exists("{}.png".format(prefix)):
-                bpy.ops.render.render(write_still=True)
-
-            # save camera
-            RT, K = camera_matrix(cam, scene.render)
-            with open("{}.json".format(prefix), "w") as f:
-                json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
-
-            b_empty.rotation_euler[2] += radians(stepsize_yaw)
-        b_empty.rotation_euler[0] -= radians(stepsize_pitch)
+    # save camera
+    RT, K = camera_matrix(cam, scene.render)
+    with open("{}.json".format(prefix), "w") as f:
+        json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
