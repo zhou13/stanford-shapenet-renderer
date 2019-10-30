@@ -11,6 +11,7 @@ import json
 import random
 import argparse
 from math import radians
+from random import uniform
 
 import numpy as np
 
@@ -58,7 +59,7 @@ def camera_matrix(camera, render):
 # Set up rendering of depth map.
 bpy.context.scene.use_nodes = True
 bpy.context.scene.render.threads_mode = "FIXED"
-bpy.context.scene.render.threads = 2
+bpy.context.scene.render.threads = 4
 tree = bpy.context.scene.node_tree
 links = tree.links
 
@@ -179,11 +180,18 @@ depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
-
 for view in range(0, args.views_yaw * args.views_pitch):
-    cam.location = (0, 0, random.uniform(1.0, 1.6))
-    b_empty.rotation_euler[0] = random.uniform(1, args.views_pitch) * stepsize_pitch
-    b_empty.rotation_euler[2] = random.uniform(0, 2 * np.pi)
+    b_empty.location = [
+        uniform(-0.25, 0.25),
+        uniform(-0.25, 0.25),
+        uniform(-0.25, 0.25),
+    ]
+    b_empty.rotation_euler = [
+        uniform(1, args.views_pitch) * stepsize_pitch,
+        0,
+        uniform(0, 2 * np.pi),
+    ]
+    cam.location = (0, 0, uniform(1.0, 1.6))
     bpy.context.scene.update()  # update camera information for json
 
     prefix = "{}{:02d}".format(fp, view)
