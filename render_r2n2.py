@@ -25,7 +25,7 @@ parser.add_argument('--output_folder', type=str, default='/tmp',
                     help='The path the output will be dumped to.')
 parser.add_argument('--dump', action='store_true',
                     help='Save the blend file')
-parser.add_argument('--scale', type=float, default=1,
+parser.add_argument('--scale', type=float, default=0.57,
                     help='Scaling factor applied to model. Depends on size of mesh.')
 parser.add_argument('--remove_doubles', type=bool, default=True,
                     help='Remove double vertices to improve mesh quality.')
@@ -83,15 +83,17 @@ bpy.data.objects["Cube"].select = True
 bpy.ops.object.delete()
 
 model_identifier = os.path.split(args.obj)[0].split("/")[-3:-1]
-ext_params = np.loadtxt(args.obj.replace("model.obj", "renderings"))
+ext_params = np.loadtxt(args.obj.replace("model.obj", "rendering_metadata.txt"))
 fp = os.path.join(args.output_folder, *model_identifier) + "/"
 bpy.ops.import_scene.obj(filepath=args.obj)
+bpy.ops.wm.save_as_mainfile(filepath="dump3.blend")
 for object in bpy.context.scene.objects:
     if object.name in ["Camera", "Lamp"]:
         continue
     bpy.context.scene.objects.active = object
     if args.scale != 1:
-        bpy.ops.transform.resize(value=(args.scale, args.scale, args.scale))
+        for i in range(3):
+            object.scale[i] = args.scale
         bpy.ops.object.transform_apply(scale=True)
     if args.remove_doubles:
         bpy.ops.object.mode_set(mode="EDIT")
@@ -101,6 +103,8 @@ for object in bpy.context.scene.objects:
         bpy.ops.object.modifier_add(type="EDGE_SPLIT")
         bpy.context.object.modifiers["EdgeSplit"].split_angle = 1.32645
         bpy.ops.object.modifier_apply(apply_as="DATA", modifier="EdgeSplit")
+
+bpy.ops.wm.save_as_mainfile(filepath="dump2.blend")
 
 # Make light just directional, disable shadows.
 lamp = bpy.data.lamps["Lamp"]
@@ -114,9 +118,9 @@ bpy.ops.object.lamp_add(type="SUN")
 lamp2 = bpy.data.lamps["Sun"]
 lamp2.shadow_method = "NOSHADOW"
 lamp2.use_specular = False
-lamp2.energy = 0.015
+lamp2.energy = 0.2
 bpy.data.objects["Sun"].rotation_euler = bpy.data.objects["Lamp"].rotation_euler
-bpy.data.objects["Sun"].rotation_euler[0] += 180
+bpy.data.objects["Sun"].rotation_euler[0] += radians(180)
 
 
 def parent_obj_to_camera(b_camera):
@@ -131,6 +135,7 @@ def parent_obj_to_camera(b_camera):
     return b_empty
 
 
+bpy.ops.wm.save_as_mainfile(filepath="dump0.blend")
 scene = bpy.context.scene
 scene.render.resolution_x = 256
 scene.render.resolution_y = 256
@@ -143,22 +148,18 @@ cam_constraint.track_axis = "TRACK_NEGATIVE_Z"
 cam_constraint.up_axis = "UP_Y"
 b_empty = parent_obj_to_camera(cam)
 cam_constraint.target = b_empty
+cam.data.angle = radians(25)
+cam.data.sensor_width = 66
+cam.data.sensor_height = 66
 
 scene.render.image_settings.file_format = "PNG"  # set output format to .png
 scene.render.image_settings.color_depth = "8"
-
-stepsize_pitch = -radians(90 / (args.views_pitch + 1))
-rotation_mode = "XYZ"
-
-if args.dump:
-    bpy.ops.wm.save_as_mainfile(filepath="dump.blend")
-
 depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
 for i, (azimuth, elevation, _, distance, _) in enumerate(ext_params):
-    b_empty.rotation_euler = [radians(elevation), 0, radians(azimuth)]
+    b_empty.rotation_euler = [radians(90 - elevation), 0, radians(90 - azimuth)]
     cam.location = (0, 0, distance)
     bpy.context.scene.update()  # update camera information for json
 
@@ -167,10 +168,14 @@ for i, (azimuth, elevation, _, distance, _) in enumerate(ext_params):
     depth_file_output.file_slots[0].path = scene.render.filepath + "_depth"
 
     # render
-    if not os.path.exists("{}.png".format(prefix)):
-        bpy.ops.render.render(write_still=True)
+    # if os.path.exists("{}.png".format(prefix)):
+    #     continue
+    bpy.ops.render.render(write_still=True)
 
     # save camera
     RT, K = camera_matrix(cam, scene.render)
     with open("{}.json".format(prefix), "w") as f:
         json.dump({"RT": tolist2d(RT), "K": tolist2d(K)}, f)
+
+    if i == 0 and args.dump:
+        bpy.ops.wm.save_as_mainfile(filepath="dump.blend")
