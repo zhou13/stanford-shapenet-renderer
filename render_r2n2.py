@@ -82,7 +82,7 @@ depth_file_output.format.color_depth = "32"
 bpy.data.objects["Cube"].select = True
 bpy.ops.object.delete()
 
-model_identifier = os.path.split(args.obj)[0].split("/")[-3:-1]
+model_identifier = os.path.split(args.obj)[0].split("/")[-2:]
 ext_params = np.loadtxt(args.obj.replace("model.obj", "rendering_metadata.txt"))
 fp = os.path.join(args.output_folder, *model_identifier) + "/"
 bpy.ops.import_scene.obj(filepath=args.obj)
