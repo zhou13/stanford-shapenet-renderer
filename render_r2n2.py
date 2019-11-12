@@ -4,11 +4,11 @@
 # Example:
 #   blender template.blend --background --python render_blender.py -- --output_folder /tmp /data/shapenet/ShapeNetCore.v2/02958343/1a0bc9ab92c915167ae33d942430658c/models/model_normalized.obj
 #
-
 import os
 import sys
 import json
 import random
+import os.path as osp
 import argparse
 from math import radians
 from random import uniform
@@ -85,8 +85,17 @@ bpy.ops.object.delete()
 model_identifier = os.path.split(args.obj)[0].split("/")[-2:]
 ext_params = np.loadtxt(args.obj.replace("model.obj", "rendering_metadata.txt"))
 fp = os.path.join(args.output_folder, *model_identifier) + "/"
+do_render = False
+# for i in range(24):
+#     prefix = "{}{:02d}".format(fp, i)
+#     if not osp.exists(prefix + ".json") or not osp.exists(prefix + ".png"):
+#         do_render = True
+#         break
+# if not do_render:
+#     sys.exit(0)
+
 bpy.ops.import_scene.obj(filepath=args.obj)
-bpy.ops.wm.save_as_mainfile(filepath="dump3.blend")
+
 for object in bpy.context.scene.objects:
     if object.name in ["Camera", "Lamp"]:
         continue
@@ -104,7 +113,6 @@ for object in bpy.context.scene.objects:
         bpy.context.object.modifiers["EdgeSplit"].split_angle = 1.32645
         bpy.ops.object.modifier_apply(apply_as="DATA", modifier="EdgeSplit")
 
-bpy.ops.wm.save_as_mainfile(filepath="dump2.blend")
 
 # Make light just directional, disable shadows.
 lamp = bpy.data.lamps["Lamp"]
@@ -135,7 +143,6 @@ def parent_obj_to_camera(b_camera):
     return b_empty
 
 
-bpy.ops.wm.save_as_mainfile(filepath="dump0.blend")
 scene = bpy.context.scene
 scene.render.resolution_x = 256
 scene.render.resolution_y = 256
@@ -158,7 +165,7 @@ depth_file_output.base_path = ""
 # normal_file_output.base_path = ""
 # albedo_file_output.base_path = ""
 
-for i, (azimuth, elevation, _, distance, _) in enumerate(ext_params):
+for i, (azimuth, elevation, _, distance, _) in enumerate(ext_params[:5]):
     b_empty.rotation_euler = [radians(90 - elevation), 0, radians(90 - azimuth)]
     cam.location = (0, 0, distance)
     bpy.context.scene.update()  # update camera information for json
